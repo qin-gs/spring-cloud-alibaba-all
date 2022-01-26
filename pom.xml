@@ -19,6 +19,14 @@
     <modules>
         <module>alibaba-nacos-discovery-server</module>
         <module>alibaba-nacos-config-client</module>
+        <module>alibaba-nacos-discovery-client-common</module>
+        <module>alibaba-sentinel-rate-limiting</module>
+        <module>alibaba-sentinel-datasource-nacos</module>
+        <module>alibaba-sentinel-datasource-apollo</module>
+        <module>alibaba-sentinel-annotation</module>
+        <module>alibaba-dubbo-api</module>
+        <module>alibaba-dubbo-server</module>
+        <module>alibaba-dubbo-client</module>
     </modules>
 
     <properties>
@@ -44,13 +52,11 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-
-    <dependencies>
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <version>1.18.20</version>
-        </dependency>
-    </dependencies>
-
+    <repositories>
+        <repository>
+            <id>nexus</id>
+            <name>personal maven</name>
+            <url>http://192.168.11.186:8081/nexus/content/groups/public/</url>
+        </repository>
+    </repositories>
 </project>

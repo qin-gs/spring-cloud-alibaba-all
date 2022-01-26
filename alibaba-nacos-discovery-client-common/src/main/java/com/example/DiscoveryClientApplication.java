@@ -1,6 +1,5 @@
 package com.example;
 
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -21,7 +20,6 @@ public class DiscoveryClientApplication {
         SpringApplication.run(DiscoveryClientApplication.class, args);
     }
 
-    @Slf4j
     @RestController
     static class TestController {
 
@@ -47,7 +45,7 @@ public class DiscoveryClientApplication {
             return "invoke: " + URL + ", return: " + result;
         }
 
-        @GetMapping("/test-restTemplate")
+        @GetMapping("/test-Builder")
         public Mono<String> testBuilder() {
             return builder.build()
                     .get()

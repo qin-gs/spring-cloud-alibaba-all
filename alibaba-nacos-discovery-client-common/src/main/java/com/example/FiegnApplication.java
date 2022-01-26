@@ -1,6 +1,5 @@
 package com.example;
 
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -20,7 +19,6 @@ public class FiegnApplication {
         SpringApplication.run(FiegnApplication.class, args);
     }
 
-    @Slf4j
     @RestController
     static class FeignController {
 
