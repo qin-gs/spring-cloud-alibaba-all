@@ -27,6 +27,7 @@
         <module>alibaba-dubbo-api</module>
         <module>alibaba-dubbo-server</module>
         <module>alibaba-dubbo-client</module>
+        <module>alibaba-notes</module>
     </modules>
 
     <properties>
@@ -52,11 +53,4 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-    <repositories>
-        <repository>
-            <id>nexus</id>
-            <name>personal maven</name>
-            <url>http://192.168.11.186:8081/nexus/content/groups/public/</url>
-        </repository>
-    </repositories>
 </project>
