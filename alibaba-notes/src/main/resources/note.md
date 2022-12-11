@@ -330,16 +330,34 @@ jwt token
 
 ### 1. Spring
 
-- `@NacosValue`：
-
-  使用 `NacosValueAnnotationBeanPostProcessor` 处理，client 收到数据变更后，会触发 `NacosConfigReceivedEvent` 事件，计算出新的值然后更新
-
 - `@NacosPropertySource`
 
-  `NacosPropertySourcePostProcessor` 处理，在 bean 定义生成后，实例化之前调用；如果类被该注解修饰就生成，
+  `NacosPropertySourcePostProcessor` 处理，在 bean **定义生成后，实例化之前** (`BeanFactoryPostProcessor`)调用；如果类被该注解修饰就生成 `NacosPropertySource` 实例，添加到 
+  `ConfigurableEnvironment` 中，可以通过 `@Value` 获取到
 
-  [参考](https://www.cnblogs.com/newstudent/p/nacos-config_in_spring-boot.html)
+  **动态刷新**：给 `PropertySource` 添加监听器，有配置变更时会重新生成 `NacosPropertySource` 并替换掉 `ENV `中过时的 `NacosPropertySource`
+
+  对于通过 `@Value` 注入的值，通过 `NacosValueAnnotationBeanPostProcessor` 利用反射更新
+
+- `@NacosValue`：
+
+  使用 `NacosValueAnnotationBeanPostProcessor` 在 bean对象**实例化完成，注入容器之前**处理
+
+  - postProcessBeforeInitialization：解析bean中所有注有 `@NacosValue`的注解，并将映射关系，保存在内存中；
+
+  - 初始化注入：参照 `AutowiredAnnotationBeanPostProcessor` 的实现，该类就是用于 `@Autowired` 和 `@Value` 在bean初始化过程中注入依赖的；
+
+    
+
+    `AnnotationNacosInjectedBeanPostProcessor` ：处理 (`ConfigService, NamingService, @NacosInjected` ) 解析被子类泛型指定的注解标记的属性或方法（抽象成了 `Member`），并注入由 `getInjectedObject` 返回的值，这个方法只做了一层缓存(`buildInjectedObjectCacheKey`)，并调用由子类扩展的方法 `doGetInjectedBean` ，完成注入
+
+    `NacosValueAnnotationBeanPostProcessor`：(处理 `@NacosValue`)
+
+  
+
+  client 收到数据变更后，会触发 `NacosConfigReceivedEvent` 事件，计算出新的值然后更新
 
 
 
 ### 2. docker & kubernetes
+
