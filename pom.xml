@@ -29,6 +29,7 @@
         <module>alibaba-dubbo-server</module>
         <module>alibaba-dubbo-client</module>
         <module>alibaba-notes</module>
+        <module>alibaba-sentinel-all</module>
     </modules>
 
     <properties>

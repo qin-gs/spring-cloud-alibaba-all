@@ -13,7 +13,7 @@ public class TestService {
     @SentinelResource(value = "hello", blockHandler = "exceptionHandler", fallback = "fallbackHandler")
     public void hello(String str) {
         System.out.println("hello " + str);
-        throw new RuntimeException("runtime");
+        // throw new RuntimeException("runtime");
     }
 
     /**
