@@ -257,6 +257,20 @@ AuthorityRuleManager.loadRules(Collections.singletonList(rule));
 
 
 
+## Sentinel 控制台
+
+`-Dcsp.sentinel.app.type=1` 启动参数会将服务标记为 API Gateway
+
+
+
+
+
+
+
+
+
+
+
 
 
 ### context
@@ -267,15 +281,29 @@ Context 维持的方式：通过 ThreadLocal 传递，只有在入口 `enter` �
 
 
 
+Node 之间的关系
+
+- Node：数据统计接口
+- StatisticNode：统计节点
+- EntranceNode：入口节点，一个 Context 有一个入口节点，统计当前 Context 的总体流量数据
+- DefaultNode：默认节点，统计一个资源在当前 Context 中的流量数据
+- ClusterNode：集群节点，统计一个资源在所有 Context 中的流量数据
 
 
 
+通过 aop 完成，SentinelResourceAspect
 
+```java
+SphU.entry(resourceName, resourceType, entryType, pjp.getArgs())
+```
 
+核心逻辑
 
+`com.alibaba.csp.sentinel.CtSph#entryWithPriority(com.alibaba.csp.sentinel.slotchain.ResourceWrapper, int, boolean, java.lang.Object...)`
 
-
-
-
-
+1. 从 ThreadLocal 中获取 Context
+2. 如果 Context 是 NullContext，说明当前系统中的 Context 超出阈值
+3. 如果当前线程没有 Context = null，创建一个默认的 (sentinel_default_context)
+4. 查找 ProcessorSlotChain
+5. 找到后创建一个资源操作对象，对资源进行操作 (chain.entry)
 
