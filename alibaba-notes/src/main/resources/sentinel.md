@@ -125,6 +125,14 @@ sentinel 槽链中每个 slot 的执行顺序是固定好的，用 ProcessorSlot
 
 <img src="./assets/slots.gif" alt="slots链" style="zoom:50%;" />
 
+node 类型
+
+<img src="./assets/node类型.png" alt="node 类型" style="zoom:30%;" />
+
+
+
+
+
 ​	自定义 slot
 
 <img src="./assets/自定义slot.png" alt="自定义slot" style="zoom:50%;" />
@@ -287,9 +295,11 @@ Node 之间的关系
 - StatisticNode：统计节点
 - EntranceNode：入口节点，一个 Context 有一个入口节点，统计当前 Context 的总体流量数据
 - DefaultNode：默认节点，统计一个资源在当前 Context 中的流量数据
-- ClusterNode：集群节点，统计一个资源在所有 Context 中的流量数据
+- ClusterNode：集群节点，统计一个资源在所有 Context 中的流量数据，每个资源都有
 
 
+
+<img src="./assets/node类型.png" alt="node类型" style="zoom:30%;" />
 
 通过 aop 完成，SentinelResourceAspect
 
@@ -302,8 +312,78 @@ SphU.entry(resourceName, resourceType, entryType, pjp.getArgs())
 `com.alibaba.csp.sentinel.CtSph#entryWithPriority(com.alibaba.csp.sentinel.slotchain.ResourceWrapper, int, boolean, java.lang.Object...)`
 
 1. 从 ThreadLocal 中获取 Context
-2. 如果 Context 是 NullContext，说明当前系统中的 Context 超出阈值
-3. 如果当前线程没有 Context = null，创建一个默认的 (sentinel_default_context)
+2. 如果 Context 是 NullContext，说明当前系统中的 Context 超出阈值 (`com.alibaba.csp.sentinel.context.ContextUtil#trueEnter`)
+3. 如果当前线程没有 Context == null，创建一个默认的 (sentinel_default_context)
 4. 查找 ProcessorSlotChain
 5. 找到后创建一个资源操作对象，对资源进行操作 (chain.entry)
+
+
+
+SlotChain 查找
+
+
+
+
+
+
+
+
+
+### sentinel 与 hystrix 线程隔离的区别
+
+- 线程池隔离 (hystrix)：支持主动超时、异步调用；线程的额外开销大
+- 信号量隔离 (sentinel)：轻量级
+
+
+
+## 限流算法
+
+- 计数器算法
+
+  - 固定窗口计数器
+
+    将时间划分为多个窗口，窗口时间间隔 (interval)
+
+    每个窗口维护一个计数器，每次请求加 1
+
+    超出阈值的请求被丢弃
+
+  - 滑动窗口计数器
+
+    将一个窗口划分为多个更小的区间，窗口范围从 (currentTime - interval) 之后的那个时区开始
+
+- 令牌桶算法
+
+  以固定速率生成令牌，桶满了之后多余令牌丢弃
+
+  请求到来后申请到令牌后才能被处理，拿不到令牌的需要等或丢弃
+
+- 漏桶算法
+
+  将所有请求全部放到桶中，以固定速率处理
+
+
+
+sentinel
+
+- 默认限流：滑动时间窗口
+- 排队等待：漏桶
+- 热点参数：令牌桶
+
+
+
+
+
+## Sentinel 基本概念
+
+- 统计数据：统计某个资源的访问数据
+- 规则判断：限流规则、降级规则、熔断规则...
+
+
+
+ProcessorSlotChain
+
+
+
+
 
