@@ -68,7 +68,46 @@
 
    - 来源访问控制规则 (AuthorityRule)：通过黑名单 或 白名单 限制资源是否通过
 
+     通过实现 `RequestoriginParser` 接口获取请求来源，需要使用过滤器添加 (可以禁止通过浏览器直接访问(绕过网关)的请求)
+
+     <img src="./assets/授权规则.png" alt="授权规则" style="zoom:30%;" />
+
+     ```yaml
+     spring:
+       cloud:
+         gateway:
+           default-filters:
+             - AddRrequestHeader=origin,gateway
+     ```
+
+     ```java
+     @Component
+     public class HeaderOrigin implements RequestOriginParser {
+     
+         @Override
+         public String parseOrigin(HttpServletRequest request) {
+             String origin = request.getHeader("origin");
+             if (origin == null) {
+                 return "blank";
+             }
+             return origin;
+         }
+     }
+     ```
+
+     
+
    - 热点参数规则 (ParamFlowRule)
+
+     根据参数值统计，对 read 这个资源的第 0 个参数做统计，每 1 秒相同参数值不能超过 5
+
+     如果第 0 个参数值为 4，阈值为 10
+
+     如果第 0 个参数值为 6，阈值为 20
+
+     <img src="./assets/热点规则.png" alt="热点规则" style="zoom:30%;" />
+
+     对 springMVC 资源无效，必须使用 `@SentinelResource` 定义，因为 controller 默认添加的资源没有将方法参数放进去，使用注解的资源使用 aop 能拿到方法参数
 
 3. 检验规则是否生效
 
@@ -79,6 +118,78 @@
    ```
 
 
+
+**流控模式**
+
+- 直接：统计当前资源的请求，触发阈值时对当前资源直接限流
+
+- 关联：统计与当前资源相关的另一个资源，触发阈值时，对当前资源限流
+
+  当修改订单业务触发阈值时，对查询业务进行限流
+
+  当 write 触发阈值时，对 read 功能限流，避免 write 功能受到影响 (write 更重要，优先级高)
+
+  <img src="./assets/关联模式.png" alt="关联模式" style="zoom:30%;" />
+
+- 链路：统计从指定链路访问当前资源的请求，触发阈值时，对指定链路进行限流
+
+
+
+**流控效果**
+
+- 快速失败：达到阈值后，新请求立刻拒绝并抛出 FlowException 异常
+- warm up：预热模式，超出阈值后抛出异常，阈值是变化的，逐渐增大
+- 排队等待：所有请求按照请求顺序排队依次执行，两个请求的间隔不能小于指定时长，超过最长等待时间的请求直接拒绝
+
+
+
+**隔离 和 降级**
+
+对服务调用者的保护
+
+- feign + sentinel
+
+  - feign.sentinel.enable=true
+  - 实现 FallbackFactory 并注册为 bean
+  - 在 @FeignClient 中配置
+
+- 线程隔离
+
+  - 线程池 (hystrix)：支持主动超时、异步调用；线程的额外开销较大；低扇出
+
+  - 信号量 (sentinel)：轻量级；高扇出 (网关)
+
+    舱壁模式，控制线程数
+
+    <img src="./assets/信号量隔离.png" alt="信号量隔离" style="zoom:30%;" />
+
+- 熔断降级
+
+  熔断器：closed, open, half-open
+
+  - 慢调用
+
+    <img src="./assets/慢调用.png" alt="慢调用" style="zoom:30%;" />
+
+    响应时间大于 500ms 的数据慢调用，最近 10000ms 内如果请求超过 5 并且异常比例大于 0.5，触发熔断，熔断时长 5s，然后进入 half-open 状态，放行一次请求做测试
+
+  - 异常比例
+
+  - 异常数
+
+
+
+**统一异常处理**
+
+实现 `BlockExceptionHandler`
+
+| 异常                 | 说明             |
+| -------------------- | ---------------- |
+| FlowException        | 限流异常         |
+| ParamFlowException   | 热点参数限流异常 |
+| DegradeException     | 降级异常         |
+| AuthrityException    | 授权规则异常     |
+| SystemBlockException | 系统规则异常     |
 
 
 
@@ -273,19 +384,47 @@ AuthorityRuleManager.loadRules(Collections.singletonList(rule));
 
 
 
+## Entry
+
+声明资源 
+
+- 手动定义：`Entry entry = SphU.entry("resourceName")`
+
+- 注解定义：`@SentinelResource`
+
+  通过 aop 完成：在 `SentinelAutoConfiguration` 中自动注入切面 `SentinelResourceAspect` 完成功能
 
 
 
+## context
 
+Context 代表调用链路上下文，贯穿一次调用链路中的所有 `Entry` 资源。
 
+Context 维持着入口节点（`entranceNode`）、本次调用链路的 curNode、调用来源（`origin`）等信息。
 
-
-
-### context
-
-Context 代表调用链路上下文，贯穿一次调用链路中的所有 `Entry`。Context 维持着入口节点（`entranceNode`）、本次调用链路的 curNode、调用来源（`origin`）等信息。Context 名称即为调用链路入口名称。
+Context 名称即为调用链路入口名称。
 
 Context 维持的方式：通过 ThreadLocal 传递，只有在入口 `enter` 的时候生效。由于 Context 是通过 ThreadLocal 传递的，因此对于异步调用链路，线程切换的时候会丢掉 Context，因此需要手动通过 `ContextUtil.runOnContext(context, f)` 来变换 context。
+
+
+
+所有的 Controller 都会被作为资源，通过 `SentinelWebInterceptor` 拦截器 (`SentinelWebAutoConfiguration` 注入)，入口是 `sentinel_spring_web_context`
+
+`com.alibaba.csp.sentinel.adapter.spring.webmvc.AbstractSentinelInterceptor#preHandle`
+
+
+
+- preHandler 获取资源名称，获取 contextName (默认 sentinel-spring-web-context)，获取 origin
+
+- 获取 Context (`ContextUtil.enter(contextName, origin)`)，没有的话创建
+
+  先创建入口节点 (EntranceNode) 添加到 ROOT，然后创建 context 把 node 放进去
+
+- 标记资源 (Sphu.entry -> ProcessorSlotChain 依次执行) 放入 request
+
+- controller -> service 执行 ProcessorChainSlot
+
+- afterCompletion 获取 request 中的资源，释放掉
 
 
 
@@ -307,19 +446,29 @@ Node 之间的关系
 SphU.entry(resourceName, resourceType, entryType, pjp.getArgs())
 ```
 
-核心逻辑
-
-`com.alibaba.csp.sentinel.CtSph#entryWithPriority(com.alibaba.csp.sentinel.slotchain.ResourceWrapper, int, boolean, java.lang.Object...)`
-
-1. 从 ThreadLocal 中获取 Context
-2. 如果 Context 是 NullContext，说明当前系统中的 Context 超出阈值 (`com.alibaba.csp.sentinel.context.ContextUtil#trueEnter`)
-3. 如果当前线程没有 Context == null，创建一个默认的 (sentinel_default_context)
-4. 查找 ProcessorSlotChain
-5. 找到后创建一个资源操作对象，对资源进行操作 (chain.entry)
 
 
+### ProcessorSlotChain 执行流程
 
-SlotChain 查找
+SphU.entry -> `CtSph#entryWithPriority`
+
+每个资源都有个 ProcessChain，从缓存中获取，没有的话进行创建 (使用 SPI 机制进行加载)
+
+```
+com.alibaba.csp.sentinel.slots.nodeselector.NodeSelectorSlot # 构建节点树
+com.alibaba.csp.sentinel.slots.clusterbuilder.ClusterBuilderSlot # 创建 ClusterNode
+com.alibaba.csp.sentinel.slots.logger.LogSlot
+com.alibaba.csp.sentinel.slots.statistic.StatisticSlot # 统计线程数/qps，自己 和 cluserNode 都要增加
+com.alibaba.csp.sentinel.slots.block.authority.AuthoritySlot # 判断 origin (在 Interceptor  通过 OriginParser 获取)
+com.alibaba.csp.sentinel.slots.system.SystemSlot # 系统保护
+com.alibaba.csp.sentinel.slots.block.flow.param.ParamFlowSlot # 热点参数 给每一个参数分别设置令牌桶，每个请求过来之后计算一下应该有的令牌 (当前时间-上次访问时间)/统计时长*每秒令牌数=一段时间内应该生成的令牌数 (不能超过 max)，判断够不够
+com.alibaba.csp.sentinel.slots.block.flow.FlowSlot # 限流 阈值类型+流控模式+流控效果
+com.alibaba.csp.sentinel.slots.block.degrade.DegradeSlot
+```
+
+使用 chain 和 context 创建一个 entry
+
+同一个资源只有一个 ClusterNode ，在每个链路中都有 DefaultNode
 
 
 
@@ -329,7 +478,7 @@ SlotChain 查找
 
 
 
-### sentinel 与 hystrix 线程隔离的区别
+## sentinel 与 hystrix 线程隔离的区别
 
 - 线程池隔离 (hystrix)：支持主动超时、异步调用；线程的额外开销大
 - 信号量隔离 (sentinel)：轻量级

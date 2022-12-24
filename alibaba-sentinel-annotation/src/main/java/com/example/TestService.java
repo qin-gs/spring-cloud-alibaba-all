@@ -10,7 +10,7 @@ public class TestService {
     /**
      * 使用注解控制流量，配置 资源点 和 处理函数
      */
-    @SentinelResource(value = "hello", blockHandler = "exceptionHandler", fallback = "fallbackHandler")
+    @SentinelResource(value = "hello-service", blockHandler = "exceptionHandler", fallback = "fallbackHandler")
     public void hello(String str) {
         System.out.println("hello " + str);
         // throw new RuntimeException("runtime");
