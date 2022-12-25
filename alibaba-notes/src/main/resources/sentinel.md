@@ -121,9 +121,9 @@
 
 **流控模式**
 
-- 直接：统计当前资源的请求，触发阈值时对当前资源直接限流
+- 直接：统计当前资源的请求，触发阈值时对当前资源直接限流 (clusterNode)
 
-- 关联：统计与当前资源相关的另一个资源，触发阈值时，对当前资源限流
+- 关联：统计与当前资源相关的另一个资源，触发阈值时，对当前资源限流 (clusterNode)
 
   当修改订单业务触发阈值时，对查询业务进行限流
 
@@ -131,7 +131,7 @@
 
   <img src="./assets/关联模式.png" alt="关联模式" style="zoom:30%;" />
 
-- 链路：统计从指定链路访问当前资源的请求，触发阈值时，对指定链路进行限流
+- 链路：统计从指定链路访问当前资源的请求，触发阈值时，对指定链路进行限流 (defaultNode)
 
 
 
@@ -443,8 +443,55 @@ Node 之间的关系
 通过 aop 完成，SentinelResourceAspect
 
 ```java
-SphU.entry(resourceName, resourceType, entryType, pjp.getArgs())
+SphU.entry(resourceName, resourceType, entryType, pjp.getArgs());
 ```
+
+1. 将信息封装成资源对象 `StringResourceWrapper`
+
+2. `CtSph#entryWithPriority`
+
+3. 从 ThreadLocal 中获取 context
+
+   - 如果是 NullContext 说明当前系统中的 Context (请求数量)超过阈值
+
+   - 如果当前线程没有，创建一个放入 ThreadLocal
+
+     用 name (sentinel_default_context) 和 origin (空字符串) 创建 Context
+
+     - 如果缓存 map 的 size 大于最大值 (2000)，放进去一个 NullContext
+
+     - 创建 EntranceNode 放入 map (同时给 ROOT 添加子节点)
+
+     ```java
+     Context context = new Context(node, name);
+     context.setOrigin(origin);
+     ```
+
+4. 查找 `ProcrssorSlotChain` (一个单向链表，默认包含一个节点，有 `first, end` 两个指针)
+
+   - 从缓存 map 中获取当前资源的 ProcessorSlotChain，如果没找到进行创建
+
+     如果 map 的 size 大于最大值 (6000)，直接返回 null
+
+     使用 `SlotChainProvider 和 SlotChainBuilder` 通过 SPI 创建
+
+   如果没找到 (说明 chain 数量超过阈值)，创建一个 CtEntry
+
+5. 创建一个资源操作对象 (entry)，对资源进行操作 (依次执行上面的 chain)
+
+   - `NodeSelectorSlot` ：创建 `DefaultNode` 节点 (也会缓存，先获取后创建)
+
+   - `ClusterBuilderSlot`：创建 `ClusterNode` 节点
+
+   - `StatisticSlot`：先执行其他，最后进行统计 (线程数/qps)
+
+   - `FlowSlot`：获取所有的流控规则，依次应用，通不过就抛出异常 `FlowException`
+
+     获取当前资源名所有的流控规则进行遍历校验，从规则中获取要限定的来源
+
+   - `DegradeSlot`：
+
+
 
 
 
@@ -462,15 +509,15 @@ com.alibaba.csp.sentinel.slots.statistic.StatisticSlot # 统计线程数/qps，�
 com.alibaba.csp.sentinel.slots.block.authority.AuthoritySlot # 判断 origin (在 Interceptor  通过 OriginParser 获取)
 com.alibaba.csp.sentinel.slots.system.SystemSlot # 系统保护
 com.alibaba.csp.sentinel.slots.block.flow.param.ParamFlowSlot # 热点参数 给每一个参数分别设置令牌桶，每个请求过来之后计算一下应该有的令牌 (当前时间-上次访问时间)/统计时长*每秒令牌数=一段时间内应该生成的令牌数 (不能超过 max)，判断够不够
-com.alibaba.csp.sentinel.slots.block.flow.FlowSlot # 限流 阈值类型+流控模式+流控效果
-com.alibaba.csp.sentinel.slots.block.degrade.DegradeSlot
+com.alibaba.csp.sentinel.slots.block.flow.FlowSlot # 限流 2阈值类型+3流控模式+3流控效果
+com.alibaba.csp.sentinel.slots.block.degrade.DegradeSlot # 熔断
 ```
 
 使用 chain 和 context 创建一个 entry
 
 同一个资源只有一个 ClusterNode ，在每个链路中都有 DefaultNode
 
-
+default, warm up -> 滑动窗口；rate limit 排队等待 (漏桶算法)
 
 
 
