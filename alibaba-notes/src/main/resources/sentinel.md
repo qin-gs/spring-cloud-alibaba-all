@@ -489,7 +489,13 @@ SphU.entry(resourceName, resourceType, entryType, pjp.getArgs());
 
      获取当前资源名所有的流控规则进行遍历校验，从规则中获取要限定的来源
 
-   - `DegradeSlot`：
+     判断是不是集群
+
+   - `DegradeSlot`：熔断降级
+
+     获取当前资源所有的熔断器，依次尝试，通不过就抛异常 `DegradeException`
+
+     将三种策略封装成两种熔断器 (响应时间/异常)
 
 
 
